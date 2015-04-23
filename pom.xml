@@ -3,11 +3,11 @@
 	<modelVersion>4.0.0</modelVersion>
 
 	<groupId>us.ne.state.ocio.publichealth.utilities</groupId>
-	<artifactId>toxiPhinmsBridge</artifactId>
+	<artifactId>simpleHL7Batcher</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<packaging>jar</packaging>
-	<name>Toxi PHINMS Bridge</name>
-	<description>PHINMS transfers files. ToxiCALL/ToxiTRACK are compatible with SFTP, etc, but not PHINMS. This tool bridges the gap.</description>
+	<name>Simple HL7 Batcher</name>
+	<description>This tool bundles individual HL7 messages into batches (which aren't fully specification compliant).</description>
 
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>

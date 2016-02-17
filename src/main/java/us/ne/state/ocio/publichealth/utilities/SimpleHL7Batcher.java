@@ -38,6 +38,9 @@ public class SimpleHL7Batcher {
 	@Parameter(names = "--archive", description = "Archive directory")
 	private String archive;
 
+	@Parameter(names = "--filter", description = "Filename filter")
+	private String fileSpec;
+	
 	@Parameter(names = "--cooldown", description = "Ignore files modified less than [cooldown] seconds ago. (This avoids partial files.)")
 	private int coolDownInSeconds = 30;
 
@@ -52,15 +55,15 @@ public class SimpleHL7Batcher {
 			return 42; //magic number tells caller to display usage;
 		}
 
-		Filter<Path> filter = new CoolDownFilterWithoutDirectories<Path>(coolDownInSeconds); //defined in this file.
+		TreeSet<Path> files = new TreeSet<Path>(); //defined in this file.
 		
-		TreeSet<Path> files = new TreeSet<Path>(new ModTimeThenFilenameComparator<Path>()); //defined in this file.
-		
+		long cutoffTimeInMillis = System.currentTimeMillis() - coolDownInSeconds * 1000;
+
 		long duration = System.currentTimeMillis();
 		
-		for(Path p : Files.newDirectoryStream(Paths.get(input), filter)) {
-	        files.add(p);
-	    }
+		for(Path p : fileSpec != null ? Files.newDirectoryStream(Paths.get(input),fileSpec) : Files.newDirectoryStream(Paths.get(input))) {
+			if (!Files.isDirectory(p) && Files.getLastModifiedTime(p).toMillis() < cutoffTimeInMillis)	files.add(p);
+		}
 		duration = System.currentTimeMillis() - duration;
 		log.info("Found {} suitable files in {} and it took {} millis.",files.size(),input,duration);
 		
@@ -104,23 +107,7 @@ public class SimpleHL7Batcher {
 		return false;
 	}
 	
-	class CoolDownFilterWithoutDirectories<T> implements Filter<Path> {
-		int coolDownInSeconds;
-		Long cutoffTimeInMillis;
-		
-		public CoolDownFilterWithoutDirectories(int coolDownInSeconds) {
-			this.coolDownInSeconds = coolDownInSeconds;
-			this.cutoffTimeInMillis = System.currentTimeMillis() - coolDownInSeconds * 1000;
-		}
-
-		@Override
-		public boolean accept(Path entry) throws IOException {
-			return !Files.isDirectory(entry) && Files.getLastModifiedTime(entry).toMillis() < cutoffTimeInMillis;
-		}
-
-	}
-	
-	//TODO it's slow (on 660 files).
+	//TODO it's slow.  One order of magnitude slower than without this comparator.
 	class ModTimeThenFilenameComparator<T> implements Comparator<Path> {
 		@Override
 		public int compare(Path o1, Path o2) {

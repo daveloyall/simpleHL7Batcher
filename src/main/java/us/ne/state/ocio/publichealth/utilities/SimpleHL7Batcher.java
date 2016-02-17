@@ -80,12 +80,13 @@ public class SimpleHL7Batcher {
 			try {
 				Files.write(outputPath, Files.readAllLines(p, StandardCharsets.UTF_8), StandardCharsets.UTF_8,
 		            StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+				//TODO what happens when the read and write work but the move doesn't?				
 				Files.move(p, archivePath.resolve(p.getFileName()));
 				outputCounter++;
+				inputCounter++;
 			} catch (MalformedInputException e) {
 				log.error("Error reading file '{}'.  Leaving it there!",p.getFileName());
 			}
-			inputCounter++;
 		}
 		log.debug("created {} batch files in {}.",outputCounter,output);
 		return 0;

@@ -1,6 +1,7 @@
 package us.ne.state.ocio.publichealth.utilities;
 
 import java.io.IOException;
+import java.nio.charset.MalformedInputException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream.Filter;
 import java.nio.file.FileSystems;
@@ -53,13 +54,15 @@ public class SimpleHL7Batcher {
 
 		Filter<Path> filter = new CoolDownFilterWithoutDirectories<Path>(coolDownInSeconds); //defined in this file.
 		
-		TreeSet<Path> files = new TreeSet<Path>(new SlowComparator<Path>()); //defined in this file.
+		TreeSet<Path> files = new TreeSet<Path>(new ModTimeThenFilenameComparator<Path>()); //defined in this file.
 		
-	    log.info("Preparing file list...");
+		long duration = System.currentTimeMillis();
+		
 		for(Path p : Files.newDirectoryStream(Paths.get(input), filter)) {
 	        files.add(p);
 	    }
-		log.info("Found {} suitable files in {}.",files.size(),input);
+		duration = System.currentTimeMillis() - duration;
+		log.info("Found {} suitable files in {} and it took {} millis.",files.size(),input,duration);
 		
 		int inputCounter = 0;
 		int outputCounter = 0;
@@ -70,14 +73,18 @@ public class SimpleHL7Batcher {
 		for (Path p : files) {
 			if(inputCounter >= batchSize) inputCounter = 0;
 			if(inputCounter == 0) {
-				outputCounter++;
 				batchNumber = System.currentTimeMillis();
 				archivePath = Files.createDirectory(Paths.get(archive + FileSystems.getDefault().getSeparator() + batchNumber));
 				outputPath=getNewOutputFile(batchNumber);
 			}
-			Files.write(outputPath, Files.readAllLines(p, StandardCharsets.UTF_8), StandardCharsets.UTF_8,
+			try {
+				Files.write(outputPath, Files.readAllLines(p, StandardCharsets.UTF_8), StandardCharsets.UTF_8,
 		            StandardOpenOption.CREATE, StandardOpenOption.APPEND);
-			Files.move(p, archivePath.resolve(p.getFileName()));
+				Files.move(p, archivePath.resolve(p.getFileName()));
+				outputCounter++;
+			} catch (MalformedInputException e) {
+				log.error("Error reading file '{}'.  Leaving it there!",p.getFileName());
+			}
 			inputCounter++;
 		}
 		log.debug("created {} batch files in {}.",outputCounter,output);
@@ -98,30 +105,35 @@ public class SimpleHL7Batcher {
 	
 	class CoolDownFilterWithoutDirectories<T> implements Filter<Path> {
 		int coolDownInSeconds;
+		Long cutoffTimeInMillis;
 		
 		public CoolDownFilterWithoutDirectories(int coolDownInSeconds) {
 			this.coolDownInSeconds = coolDownInSeconds;
+			this.cutoffTimeInMillis = System.currentTimeMillis() - coolDownInSeconds * 1000;
 		}
 
 		@Override
 		public boolean accept(Path entry) throws IOException {
-			return !Files.isDirectory(entry) && Files.getLastModifiedTime(entry).toMillis() < System.currentTimeMillis() - coolDownInSeconds * 1000;
+			return !Files.isDirectory(entry) && Files.getLastModifiedTime(entry).toMillis() < cutoffTimeInMillis;
 		}
 
 	}
 	
 	//TODO it's slow (on 660 files).
-	class SlowComparator<T> implements Comparator<Path> {
+	class ModTimeThenFilenameComparator<T> implements Comparator<Path> {
 		@Override
 		public int compare(Path o1, Path o2) {
 	        try {
-	        	String timePlusName1 = Files.getLastModifiedTime(o1) + o1.getFileName().toString();
-	        	String timePlusName2 = Files.getLastModifiedTime(o2) + o2.getFileName().toString();
-	            return timePlusName1.compareTo(timePlusName2);
+	        	int firstTry = Files.getLastModifiedTime(o1).compareTo(Files.getLastModifiedTime(o2));
+
+	        	if (firstTry != 0)
+	        		return firstTry; 
+	        	else
+	        		return o1.getFileName().compareTo(o2.getFileName());
 	        } catch (IOException e) {
 	            log.error("Sorting file list failed.",e);
+	            return 0;
 	        }
-	        return 0;
 	    }
 
 	}		

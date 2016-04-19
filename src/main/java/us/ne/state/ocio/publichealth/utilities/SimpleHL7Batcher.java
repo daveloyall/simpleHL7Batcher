@@ -16,16 +16,22 @@ import org.apache.logging.log4j.LogManager;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
+import com.beust.jcommander.ParameterException;
 
 public class SimpleHL7Batcher {
 	private static final Logger log = LogManager.getLogger(SimpleHL7Batcher.class);
+	private static JCommander jc = null;
 
 	public static void main(String[] args) throws IOException {
 		SimpleHL7Batcher shb = new SimpleHL7Batcher();
-		JCommander jc = new JCommander(shb, args);
-		jc.setProgramName("java -jar simpleHL7Batcher.jar");
-		if (shb.run() == 42)
-			jc.usage();
+		try {
+			jc = new JCommander(shb, args);
+			jc.setProgramName("java -jar simpleHL7Batcher.jar");
+			shb.run();
+		} catch (ParameterException pe) {
+			System.err.println(pe.getLocalizedMessage());
+			System.err.println("Try passing --help for usage information.");
+		}
 	}
 
 	@Parameter(names = "--input", description = "Input directory")
@@ -51,7 +57,8 @@ public class SimpleHL7Batcher {
 
 	private int run() throws IOException {
 		if (help || anyNull(input, output, archive)) {
-			return 42; //magic number tells caller to display usage;
+			jc.usage(); 
+			return 1; //this returned value isn't checked right now.
 		}
 
 		TreeSet<Path> files = new TreeSet<Path>(); //defined in this file.

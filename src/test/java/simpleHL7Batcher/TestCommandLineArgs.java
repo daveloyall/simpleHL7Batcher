@@ -13,6 +13,7 @@ import org.junit.Test;
 import junit.framework.TestCase;
 import us.ne.state.ocio.publichealth.utilities.SimpleHL7Batcher;
 
+//TODO there are no meaningful tests in here.
 public class TestCommandLineArgs extends TestCase {
 	private final ByteArrayOutputStream outContent = new ByteArrayOutputStream();
 	private final ByteArrayOutputStream errContent = new ByteArrayOutputStream();
@@ -53,16 +54,33 @@ public class TestCommandLineArgs extends TestCase {
 	public void testEmpty() throws IOException {
 		String[] args = {};
 		SimpleHL7Batcher.main(args);
-		assertEquals("Hello",outContent.toString());
-		assertEquals(null,errContent.toString());
+		assertEquals("Usage: java -jar simpleHL7Batcher.jar [options]\n" +
+				"  Options:\n" +
+				"    --archive\n" +
+				"       Archive directory\n" +
+				"    --batchsize\n" +
+				"       Number of files per batch\n" +
+				"       Default: 200\n" +
+				"    --cooldown\n" +
+				"       Ignore files modified less than [cooldown] seconds ago. (This avoids\n" +
+				"       partial files.)\n" +
+				"       Default: 30\n" +
+				"    --filter\n" +
+				"       Filename filter\n" +
+				"    --input\n" +
+				"       Input directory\n" +
+				"    --output\n" +
+				"       Output directory\n\r\n",outContent.toString());
+		assertEquals("",errContent.toString());
 	}
 	
 	@Test
 	public void testFoo() throws IOException {
 		String[] args = {"foo"};
 		SimpleHL7Batcher.main(args);
-		assertEquals("Hello",outContent.toString());
-		assertEquals("Hello",errContent.toString());
+		assertEquals("",outContent.toString());
+		assertEquals("Was passed main parameter 'foo' but no main parameter was defined\r\n"+
+				"Try passing --help for usage information.\r\n",errContent.toString());
 		
 	}
 	

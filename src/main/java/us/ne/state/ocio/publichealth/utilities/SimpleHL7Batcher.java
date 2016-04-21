@@ -1,5 +1,7 @@
 package us.ne.state.ocio.publichealth.utilities;
 
+import java.io.BufferedReader;
+import java.io.FileReader;
 import java.io.IOException;
 import java.nio.charset.MalformedInputException;
 import java.nio.charset.StandardCharsets;
@@ -8,7 +10,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.List;
 import java.util.TreeSet;
 
 import org.apache.logging.log4j.Logger;
@@ -52,6 +56,9 @@ public class SimpleHL7Batcher {
 	@Parameter(names = "--batchsize", description = "Number of files per batch")
 	private int batchSize = 200;
 
+	@Parameter(names = "--rebatch", description = "Re-bundle large files into managable batches")
+	private boolean rebatch;
+	
 	@Parameter(names = "--help", help = true, description = "This help message.", hidden = true)
 	private boolean help;
 
@@ -72,36 +79,103 @@ public class SimpleHL7Batcher {
 		}
 		duration = System.currentTimeMillis() - duration;
 		log.info("Found {} suitable files in {} and it took {} millis.",files.size(),input,duration);
-		
-		int inputCounter = 0;
-		int outputCounter = 0;
-		Path outputPath = null;
-		long batchNumber = 0;
-		
-		Path archivePath = null;
-		for (Path p : files) {
-			if(inputCounter >= batchSize) inputCounter = 0;
-			if(inputCounter == 0) {
-				batchNumber = System.currentTimeMillis();
-				archivePath = Files.createDirectory(Paths.get(archive + FileSystems.getDefault().getSeparator() + batchNumber));
-				outputPath=getNewOutputFile(batchNumber);
+		duration = System.currentTimeMillis();
+		if (rebatch) {
+			int inputCounter = 0;
+			int outputCounter = 0;
+			Path outputPath = null;
+			long batchSet = 0;
+			Path archivePath = null;
+			
+			for (Path p : files) {
+				batchSet = System.currentTimeMillis();
+				outputPath=getNewOutputFile(batchSet + ".0");
+				
+				List<String> msgs = new ArrayList<>();
+				
+				BufferedReader reader = new BufferedReader(new FileReader(p.toFile()));
+				try {
+					int i = 0;
+					int fileNumber = 0;
+					int c;
+					StringBuilder msg = new StringBuilder();
+					while ((c = reader.read()) != -1) {
+						switch (c) {
+						case '\n' : 
+//							log.debug(msg.toString());
+							msgs.add(msg.toString());
+							msg.setLength(0);
+							i++;
+							if (i == batchSize) {
+								//Dump what we got
+								writeSome(msgs,outputPath);
+								outputCounter++;
+								//and start fresh
+								msgs.clear();
+								i = 0;
+								outputPath=getNewOutputFile(batchSet + "." + ++fileNumber);
+							}
+							break;
+						default:
+							msg.append((char)c);
+						}
+						
+					}
+					
+					if (msgs.size() > 0) {
+						writeSome(msgs,outputPath);
+					}
+					
+					reader.close();
+					archivePath = Files.createDirectory(Paths.get(archive + FileSystems.getDefault().getSeparator() + batchSet));
+					Files.move(p, archivePath.resolve(p.getFileName()));
+				} finally {
+					reader.close(); //it might already be closed.
+				}
+				duration = System.currentTimeMillis() - duration;
+				log.debug("created {} batch files in {} and it took {} millis.",outputCounter,output,duration);
 			}
-			try {
-				Files.write(outputPath, Files.readAllLines(p, StandardCharsets.UTF_8), StandardCharsets.UTF_8,
-		            StandardOpenOption.CREATE, StandardOpenOption.APPEND);
-				//TODO what happens when the read and write work but the move doesn't?				
-				Files.move(p, archivePath.resolve(p.getFileName()));
-				outputCounter++;
-				inputCounter++;
-			} catch (MalformedInputException e) {
-				log.error("Error reading file '{}'.  Leaving it there!",p.getFileName());
+		} else { //This is what we did before rebatch existed.
+			int inputCounter = 0;
+			int outputCounter = 0;
+			Path outputPath = null;
+			long batchNumber = 0;
+			Path archivePath = null;
+			
+			for (Path p : files) {
+				if(inputCounter >= batchSize) inputCounter = 0;
+				if(inputCounter == 0) {
+					batchNumber = System.currentTimeMillis();
+					archivePath = Files.createDirectory(Paths.get(archive + FileSystems.getDefault().getSeparator() + batchNumber));
+					outputPath=getNewOutputFile(batchNumber);
+				}
+				try {
+					Files.write(outputPath, Files.readAllLines(p, StandardCharsets.UTF_8), StandardCharsets.UTF_8,
+			            StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+					//TODO what happens when the read and write work but the move doesn't?				
+					Files.move(p, archivePath.resolve(p.getFileName()));
+					outputCounter++;
+					inputCounter++;
+				} catch (MalformedInputException e) {
+					log.error("Error reading file '{}'.  Leaving it there!",p.getFileName());
+				}
 			}
+			duration = System.currentTimeMillis() - duration;
+			log.debug("created {} batch files in {} and it took {} millis.",outputCounter,output,duration);
 		}
-		log.debug("created {} batch files in {}.",outputCounter,output);
 		return 0;
 	}
 
+	private void writeSome(List<String> msgs, Path outputPath) throws IOException {
+		Files.write(outputPath, msgs, StandardCharsets.UTF_8, StandardOpenOption.CREATE,
+				StandardOpenOption.APPEND);
+	}
+
 	private Path getNewOutputFile(long batchNumber) {
+		return getNewOutputFile(Long.toString(batchNumber));
+	}
+
+	private Path getNewOutputFile(String batchNumber) {
 		return Paths.get(output + FileSystems.getDefault().getSeparator() + "batch." + batchNumber + ".hl7");
 	}
 

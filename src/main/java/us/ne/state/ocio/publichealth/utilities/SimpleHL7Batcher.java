@@ -81,8 +81,8 @@ public class SimpleHL7Batcher {
 		log.info("Found {} suitable files in {} and it took {} millis.",files.size(),input,duration);
 		duration = System.currentTimeMillis();
 		if (rebatch) {
-			int inputCounter = 0;
-			int outputCounter = 0;
+			int batchCounter = 0;
+			int messageCounter = 0;
 			Path outputPath = null;
 			long batchSet = 0;
 			Path archivePath = null;
@@ -106,10 +106,11 @@ public class SimpleHL7Batcher {
 							msgs.add(msg.toString());
 							msg.setLength(0);
 							i++;
+							messageCounter++;
 							if (i == batchSize) {
+								batchCounter++;
 								//Dump what we got
 								writeSome(msgs,outputPath);
-								outputCounter++;
 								//and start fresh
 								msgs.clear();
 								i = 0;
@@ -133,7 +134,8 @@ public class SimpleHL7Batcher {
 					reader.close(); //it might already be closed.
 				}
 				duration = System.currentTimeMillis() - duration;
-				log.debug("created {} batch files in {} and it took {} millis.",outputCounter,output,duration);
+				log.debug("created {} batch files containing {} messages total, wrote them to {} and it took {} millis.",batchCounter,messageCounter,output,duration);
+				messageCounter = 0;
 			}
 		} else { //This is what we did before rebatch existed.
 			int inputCounter = 0;

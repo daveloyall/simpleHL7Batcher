@@ -142,12 +142,19 @@ public class SimpleHL7Batcher {
 			int outputCounter = 0;
 			Path outputPath = null;
 			long batchNumber = 0;
+			long oldBatchNumber = 0;
 			Path archivePath = null;
 			
 			for (Path p : files) {
 				if(inputCounter >= batchSize) inputCounter = 0;
 				if(inputCounter == 0) {
 					batchNumber = System.currentTimeMillis();
+					//Under some circumstances, we get duplicate batch numbers...
+					if (batchNumber <= oldBatchNumber) {
+						log.debug("Did not get new batchnumber, incrementing old one by one.");
+						batchNumber = oldBatchNumber + 1;
+					}
+					oldBatchNumber = batchNumber;
 					archivePath = Files.createDirectory(Paths.get(archive + FileSystems.getDefault().getSeparator() + batchNumber));
 					outputPath=getNewOutputFile(batchNumber);
 				}

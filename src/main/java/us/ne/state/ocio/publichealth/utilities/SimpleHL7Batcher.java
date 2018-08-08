@@ -86,13 +86,13 @@ public class SimpleHL7Batcher {
 			Path outputPath = null;
 			long batchSet = 0;
 			Path archivePath = null;
-			
+			int ringBuffer[] = {0,0,0,0,0};
 			for (Path p : files) {
 				batchSet = System.currentTimeMillis();
 				outputPath=getNewOutputFile(batchSet + ".0");
 				
 				List<String> msgs = new ArrayList<>();
-				
+				int fileLevelCharCount = 0;
 				BufferedReader reader = new BufferedReader(new FileReader(p.toFile()));
 				try {
 					int i = 0;
@@ -100,8 +100,18 @@ public class SimpleHL7Batcher {
 					int c;
 					StringBuilder msg = new StringBuilder();
 					while ((c = reader.read()) != -1) {
+						fileLevelCharCount++;
+						ringBuffer[fileLevelCharCount % 5] = c;
 						switch (c) {
-						case '\n' : 
+						case 'H' :
+							if (ringBuffer[(fileLevelCharCount - 1) % 5] != 'S' //Were the chars before this H "\nMS" or "\rMS"?
+							||  ringBuffer[(fileLevelCharCount - 2) % 5] != 'M'
+							|| (ringBuffer[(fileLevelCharCount - 3) % 5] != '\r' && ringBuffer[(fileLevelCharCount - 3) % 5] != '\n')) {
+								if (fileLevelCharCount > 3) {
+									msg.append((char)ringBuffer[(fileLevelCharCount - 3) % 5]);
+								}
+								continue;
+							}
 //							log.debug(msg.toString());
 							msgs.add(msg.toString());
 							msg.setLength(0);
@@ -117,8 +127,12 @@ public class SimpleHL7Batcher {
 								outputPath=getNewOutputFile(batchSet + "." + ++fileNumber);
 							}
 							break;
+						case '\n':
+							ringBuffer[fileLevelCharCount % 5] = '\r';
 						default:
-							msg.append((char)c);
+							if (fileLevelCharCount >=3) {
+								msg.append((char)ringBuffer[(fileLevelCharCount - 3) % 5]);
+							}
 						}
 						
 					}
